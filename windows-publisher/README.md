@@ -17,8 +17,8 @@ windows-publisher/
 ## 管理员部署顺序
 
 1. 编辑 `desktop/src/default-config.mjs`，填入共用 S3 配置。该软件只私下分发，因此配置会随安装包提供。
-2. 在 Windows 构建机进入 `desktop/`，执行 `npm ci` 与 `npm run dist:win`。
-3. 将 `desktop/dist/` 下的 NSIS 安装包分发给使用者。每个使用者安装后只需点击“登录抖音”并完成扫码。
+2. 推送代码到 GitHub，或在仓库的 **Actions -> Build Windows publisher -> Run workflow** 手动运行。工作流会在 `windows-latest` 上执行 `npm ci`、下载 Chromium 并构建 NSIS 安装包。
+3. 在该次 workflow 的 Artifacts 中下载 `douyin-article-publisher-windows-*`，将其中的 NSIS 安装包私下分发给使用者。每个使用者安装后只需点击“登录抖音”并完成扫码。
 
 桌面端首次打开会自动导入 `desktop/src/default-article.md` 中的标题、摘要和正文。模板中的 `[...]` 标记会保留在编辑框中，但发布时会按命令行流程去掉标题和摘要中的标记；修改模板后重新构建安装包即可更新默认文章。
 
@@ -38,7 +38,7 @@ S3 访问密钥会被打包进私有安装程序，必须只通过受控渠道�
 
 ## 开发与验证
 
-桌面端可在 macOS 或 Windows 开发，最终安装包应在 Windows 构建机生成：
+桌面端可在 macOS 或 Windows 开发。GitHub Actions 已配置 Windows 构建；本地构建时可使用：
 
 ```bash
 cd desktop
