@@ -18,6 +18,8 @@
 
 ## 首次配置
 
+如果需要分发给 Windows 使用者，请查看 [`windows-publisher/`](windows-publisher/)。它提供可打包为 `.exe` 的桌面客户端；私下分发时可将共用 S3 配置随安装包内置，每位使用者只需在自己的客户端中登录抖音账号。
+
 复制 `.env.example` 为 `.env`，填写 S3 兼容对象存储配置。Rainyun 可直接使用 `S3_ACCESS_KEY`、`S3_SECRET_KEY` 和 `S3_PUBLIC_BASE`；脚本也兼容 `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY` 和 `S3_PUBLIC_BASE_URL`。公开地址必须是浏览器可以访问的 URL；如果桶是私有的，抖音无法读取文章图片。
 
 `.env` 仅保存在本机，已加入 `.gitignore`，不要把访问密钥提交到 Git 或发送到公开位置。
