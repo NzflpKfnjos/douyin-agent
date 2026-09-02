@@ -4,6 +4,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { chromium } from "playwright";
 import { uploadImage } from "../oss-s3/upload.mjs";
 
@@ -50,7 +51,8 @@ function replaceImage(markdown, url) {
 }
 
 function titleFromMarkdown(markdown) {
-  return markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^#+\s*/, "").trim() || "抖音文章";
+  const title = markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^#+\s*/, "").trim() || "抖音文章";
+  return title.replace(/^\[([^\]]+)\]/, "$1");
 }
 
 function bodyWithoutImage(markdown) {
@@ -65,58 +67,183 @@ async function firstVisible(page, selectors) {
   return null;
 }
 
+async function exactVisibleText(page, text) {
+  const matches = page.getByText(text, { exact: true });
+  for (let index = 0; index < await matches.count(); index += 1) {
+    const match = matches.nth(index);
+    if (await match.isVisible().catch(() => false)) return match;
+  }
+  return null;
+}
+
+async function fileInputWithAccept(page, fragment) {
+  const inputs = page.locator("input[type=file]");
+  for (let index = 0; index < await inputs.count(); index += 1) {
+    const input = inputs.nth(index);
+    if ((await input.getAttribute("accept") || "").includes(fragment)) return input;
+  }
+  return null;
+}
+
+async function exactButton(page, text) {
+  const buttons = page.getByRole("button", { name: text, exact: true });
+  for (let index = 0; index < await buttons.count(); index += 1) {
+    const button = buttons.nth(index);
+    if (await button.isVisible().catch(() => false)) return button;
+  }
+  return null;
+}
+
+async function pageText(page) {
+  return (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+}
+
 async function waitForLogin(page) {
-  const loginSignals = ["text=登录", "text=扫码登录", "text=手机号登录", "input[placeholder*='手机号']"];
-  const login = await firstVisible(page, loginSignals);
-  if (!login) return;
-  console.log("请在打开的抖音创作者平台窗口中完成登录，完成后回到终端按回车继续。");
+  await page.waitForTimeout(2500);
+  const signals = ["扫码登录", "验证码登录", "密码登录", "请输入手机号", "登录即代表同意"];
+  const isLoginPage = async () => {
+    const text = await pageText(page);
+    return signals.some((signal) => text.includes(signal));
+  };
+  if (!(await isLoginPage())) return;
+  console.log("请在抖音创作者平台窗口中完成登录。登录成功后回到终端按回车继续。");
   const rl = createInterface({ input, output });
   await rl.question("");
   rl.close();
+  await page.waitForTimeout(2500);
 }
 
-async function fillEditor(page, title, body, imagePath) {
-  const titleInput = await firstVisible(page, [
-    "input[placeholder*='标题']", "textarea[placeholder*='标题']", "input[aria-label*='标题']",
-  ]);
-  if (titleInput) await titleInput.fill(title);
-
-  const editor = await firstVisible(page, [
-    "[contenteditable='true']", "textarea[placeholder*='正文']", "textarea[placeholder*='内容']",
-  ]);
-  if (!editor) throw new Error("没有找到文章编辑器。请确认当前页面是抖音图文/文章发布页。页面已保留，便于手动处理。");
-  await editor.click();
-  await editor.fill(body);
-
-  const fileInput = page.locator("input[type=file]").first();
-  if (await fileInput.count()) {
-    await fileInput.setInputFiles(imagePath);
-    await page.waitForTimeout(1000);
-  } else {
-    console.warn("页面没有发现图片上传控件，请在平台窗口中手动上传本次图片:", basename(imagePath));
+async function generateArticleHeadImage(page) {
+  const aiButton = await exactVisibleText(page, "AI生成");
+  if (!aiButton) throw new Error("没有找到文章头图的“AI生成”按钮。");
+  await aiButton.click();
+  try {
+    await page.waitForFunction(
+      () => !document.body.innerText.includes("生成中...") && document.querySelector("[data-article-head-image] img"),
+      undefined,
+      { timeout: 90000 },
+    );
+  } catch {
+    throw new Error("抖音 AI 头图生成超时，请在页面中检查生成状态。");
   }
+  console.log("已使用抖音 AI 生成文章头图。");
 }
 
-async function publishOnDouyin({ markdown, imagePath, headed }) {
+async function addArticleTopic(page, topic) {
+  const addTopic = await exactVisibleText(page, "点击添加话题");
+  if (!addTopic) throw new Error("没有找到文章话题入口。");
+  await addTopic.click();
+  await page.waitForTimeout(500);
+  const search = await firstVisible(page, ["input[placeholder*='搜索或输入']"]);
+  if (!search) throw new Error("没有找到话题搜索框。");
+  await search.fill(topic);
+  await page.waitForTimeout(900);
+  const topicOption = await exactVisibleText(page, `#${topic}`);
+  if (!topicOption) throw new Error(`没有找到话题 #${topic}。`);
+  await topicOption.click();
+  const confirm = await firstVisible(page, ["button:has-text('确认添加')"]);
+  if (!confirm) throw new Error("没有找到话题确认按钮。");
+  await confirm.click();
+  await page.waitForTimeout(500);
+  console.log(`已添加话题 #${topic}。`);
+}
+
+async function chooseRecommendedMusic(page) {
+  const chooseMusic = await exactVisibleText(page, "选择音乐");
+  if (!chooseMusic) throw new Error("没有找到配乐入口。");
+  await chooseMusic.click();
+  await page.waitForFunction(
+    () => [...document.querySelectorAll("button")].some((button) => button.innerText.trim() === "使用"),
+    undefined,
+    { timeout: 30000 },
+  );
+  const classButtons = page.locator("button.apply-btn-LUPP0D");
+  const useButtons = (await classButtons.count())
+    ? classButtons
+    : page.locator("button").filter({ hasText: /^使用$/ });
+  const count = await useButtons.count();
+  if (!count) throw new Error("推荐配乐列表为空。");
+  const index = Math.floor(Math.random() * Math.min(5, count));
+  const selected = useButtons.nth(index);
+  await selected.evaluate((element) => element.click());
+  await page.waitForTimeout(800);
+  console.log(`已从推荐配乐前 ${Math.min(5, count)} 首中随机选择第 ${index + 1} 首。`);
+}
+
+async function publishArticleOnDouyin({ markdownPath, title, headed }) {
   const browserDataDir = resolve(rootDir, process.env.DOUYIN_BROWSER_DATA_DIR || ".douyin-browser");
+  const systemChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  const executablePath = process.env.DOUYIN_BROWSER_EXECUTABLE_PATH
+    || (existsSync(systemChrome) ? systemChrome : undefined);
   const context = await chromium.launchPersistentContext(browserDataDir, {
     headless: !headed,
+    ...(executablePath ? { executablePath } : {}),
     viewport: { width: 1440, height: 960 },
   });
+  try {
   const page = context.pages()[0] || await context.newPage();
-  await page.goto(process.env.DOUYIN_CREATOR_URL || "https://creator.douyin.com/creator-micro/content/post", { waitUntil: "domcontentloaded" });
+  await page.goto(process.env.DOUYIN_CREATOR_URL || "https://creator.douyin.com/creator-micro/content/upload", { waitUntil: "domcontentloaded" });
   await waitForLogin(page);
-  await fillEditor(page, titleFromMarkdown(markdown), bodyWithoutImage(markdown), imagePath);
+  await page.waitForTimeout(1800);
 
-  const publishButton = await firstVisible(page, [
-    "button:has-text('发布')", "text=发布", "button:has-text('立即发布')",
+  const articleTab = await exactVisibleText(page, "发布文章");
+  if (!articleTab) {
+    await page.screenshot({ path: join(rootDir, "douyin.debug.png"), fullPage: true }).catch(() => {});
+    throw new Error(`没有找到“发布文章”入口，当前页面: ${page.url()}。已保存 douyin.debug.png。`);
+  }
+  await articleTab.click();
+  await page.waitForTimeout(1800);
+
+  const importButton = await exactVisibleText(page, "一键导入");
+  if (!importButton) {
+    await page.screenshot({ path: join(rootDir, "douyin.debug.png"), fullPage: true }).catch(() => {});
+    throw new Error("没有找到“一键导入”按钮，请确认抖音文章发布页已加载。");
+  }
+  await importButton.click();
+  await page.waitForTimeout(800);
+
+  const markdownInput = await fileInputWithAccept(page, ".md");
+  if (!markdownInput) throw new Error("没有找到 Markdown 导入控件。");
+  await markdownInput.setInputFiles(markdownPath);
+  await page.waitForURL(/\/content\/post\/article/, { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const titleInput = await firstVisible(page, [
+    "input[placeholder*='文章标题']", "input[placeholder*='标题']",
   ]);
-  if (!publishButton) throw new Error("没有找到发布按钮。请在平台窗口中检查内容并手动发布。");
+  if (!titleInput) {
+    await page.screenshot({ path: join(rootDir, "douyin.debug.png"), fullPage: true }).catch(() => {});
+    throw new Error(`文章导入后没有找到标题输入框，当前页面: ${page.url()}。已保存 douyin.debug.png。`);
+  }
+  await titleInput.fill(title);
+
+  const summaryInput = await firstVisible(page, [
+    "input[placeholder*='摘要']", "textarea[placeholder*='摘要']",
+  ]);
+  if (!summaryInput) throw new Error("没有找到文章摘要输入框。");
+  await summaryInput.fill("本作品roll30位体验，打出“666”安排！");
+
+  const editor = await firstVisible(page, ["[contenteditable='true']", ".tiptap.ProseMirror"]);
+  if (!editor) throw new Error("文章导入后没有找到正文编辑器。");
+  const importedImageCount = await editor.locator("img").count().catch(() => 0);
+  const importedText = (await editor.innerText().catch(() => "")).trim();
+  if (!importedText) throw new Error("Markdown 导入后正文为空。");
+  console.log(`文章已导入，正文图片 ${importedImageCount} 张。`);
+
+  await generateArticleHeadImage(page);
+  await addArticleTopic(page, process.env.DOUYIN_TOPIC_TAG || "暗区突围");
+  await chooseRecommendedMusic(page);
+
+  const publishButton = await exactVisibleText(page, "发布");
+  if (!publishButton) throw new Error("没有找到文章发布按钮。");
+  if (await publishButton.isDisabled().catch(() => false)) throw new Error("文章发布按钮当前不可用，请检查必填项。");
   await publishButton.click();
-  await page.waitForTimeout(1500);
-  console.log("已点击发布，请在抖音创作者平台确认发布结果。浏览器会保持打开 30 秒。");
-  await page.waitForTimeout(30000);
-  await context.close();
+  await page.waitForTimeout(4000);
+  console.log("已点击文章发布，请在抖音创作者平台确认发布结果。浏览器会保持打开 10 秒。");
+  await page.waitForTimeout(10000);
+  } finally {
+    await context.close().catch(() => {});
+  }
 }
 
 async function main() {
@@ -132,7 +259,7 @@ async function main() {
   console.log(`已生成: ${outputPath}`);
   console.log(`图片链接: ${imageUrl}`);
   if (options.dryRun) return;
-  await publishOnDouyin({ markdown, imagePath, headed: options.headed });
+  await publishArticleOnDouyin({ markdownPath: outputPath, title: titleFromMarkdown(markdown), headed: options.headed });
 }
 
 main().catch((error) => {
