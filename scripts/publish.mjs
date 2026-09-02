@@ -12,6 +12,7 @@ const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const templatePath = join(rootDir, "douyin.md");
 const imagesDir = join(rootDir, "images");
 const outputPath = join(rootDir, "douyin.generated.md");
+const importPath = join(rootDir, "douyin.import.md");
 const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 
 function parseArgs(argv) {
@@ -53,6 +54,24 @@ function replaceImage(markdown, url) {
 function titleFromMarkdown(markdown) {
   const title = markdown.split(/\r?\n/).find((line) => line.trim())?.replace(/^#+\s*/, "").trim() || "抖音文章";
   return title.replace(/^\[([^\]]+)\]/, "$1");
+}
+
+function summaryFromMarkdown(markdown) {
+  const lines = markdown.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const summary = (lines[1] || lines[0] || "抖音文章").replace(/\[([^\]]+)\]/g, "$1");
+  return summary.slice(0, 30);
+}
+
+function bodyForArticleImport(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  let removed = 0;
+  let index = 0;
+  while (index < lines.length && removed < 2) {
+    if (lines[index].trim()) removed += 1;
+    index += 1;
+  }
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  return `${lines.slice(index).join("\n").trim()}\n`;
 }
 
 function bodyWithoutImage(markdown) {
@@ -113,20 +132,24 @@ async function waitForLogin(page) {
   await page.waitForTimeout(2500);
 }
 
-async function generateArticleHeadImage(page) {
-  const aiButton = await exactVisibleText(page, "AI生成");
-  if (!aiButton) throw new Error("没有找到文章头图的“AI生成”按钮。");
-  await aiButton.click();
-  try {
-    await page.waitForFunction(
-      () => !document.body.innerText.includes("生成中...") && document.querySelector("[data-article-head-image] img"),
-      undefined,
-      { timeout: 90000 },
-    );
-  } catch {
-    throw new Error("抖音 AI 头图生成超时，请在页面中检查生成状态。");
-  }
-  console.log("已使用抖音 AI 生成文章头图。");
+async function uploadArticleHeadImage(page, imagePath) {
+  const uploadButton = await firstVisible(page, [".uploadButton-B4xMQ2"]);
+  if (!uploadButton) throw new Error("没有找到文章头图上传按钮。");
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser", { timeout: 10000 }),
+    uploadButton.click(),
+  ]);
+  await chooser.setFiles(imagePath);
+  await page.waitForTimeout(800);
+  const confirm = await exactVisibleText(page, "确定");
+  if (!confirm) throw new Error("头图上传后没有找到裁剪确认按钮。");
+  await confirm.click();
+  await page.waitForFunction(
+    () => document.body.innerText.includes("点击替换图片") && document.querySelector("[data-article-head-image] img"),
+    undefined,
+    { timeout: 30000 },
+  );
+  console.log("已使用本次随机图片作为文章头图。");
 }
 
 async function addArticleTopic(page, topic) {
@@ -170,7 +193,7 @@ async function chooseRecommendedMusic(page) {
   console.log(`已从推荐配乐前 ${Math.min(5, count)} 首中随机选择第 ${index + 1} 首。`);
 }
 
-async function publishArticleOnDouyin({ markdownPath, title, headed }) {
+async function publishArticleOnDouyin({ markdownPath, imagePath, title, summary, headed }) {
   const browserDataDir = resolve(rootDir, process.env.DOUYIN_BROWSER_DATA_DIR || ".douyin-browser");
   const systemChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
   const executablePath = process.env.DOUYIN_BROWSER_EXECUTABLE_PATH
@@ -221,7 +244,7 @@ async function publishArticleOnDouyin({ markdownPath, title, headed }) {
     "input[placeholder*='摘要']", "textarea[placeholder*='摘要']",
   ]);
   if (!summaryInput) throw new Error("没有找到文章摘要输入框。");
-  await summaryInput.fill("本作品roll30位体验，打出“666”安排！");
+  await summaryInput.fill(summary);
 
   const editor = await firstVisible(page, ["[contenteditable='true']", ".tiptap.ProseMirror"]);
   if (!editor) throw new Error("文章导入后没有找到正文编辑器。");
@@ -230,7 +253,7 @@ async function publishArticleOnDouyin({ markdownPath, title, headed }) {
   if (!importedText) throw new Error("Markdown 导入后正文为空。");
   console.log(`文章已导入，正文图片 ${importedImageCount} 张。`);
 
-  await generateArticleHeadImage(page);
+  await uploadArticleHeadImage(page, imagePath);
   await addArticleTopic(page, process.env.DOUYIN_TOPIC_TAG || "暗区突围");
   await chooseRecommendedMusic(page);
 
@@ -256,10 +279,18 @@ async function main() {
   const imageUrl = await uploadImage(imagePath);
   const markdown = replaceImage(withTopic, imageUrl);
   await writeFile(outputPath, markdown, "utf8");
+  await writeFile(importPath, bodyForArticleImport(markdown), "utf8");
   console.log(`已生成: ${outputPath}`);
+  console.log(`抖音导入文件: ${importPath}`);
   console.log(`图片链接: ${imageUrl}`);
   if (options.dryRun) return;
-  await publishArticleOnDouyin({ markdownPath: outputPath, title: titleFromMarkdown(markdown), headed: options.headed });
+  await publishArticleOnDouyin({
+    markdownPath: importPath,
+    imagePath,
+    title: titleFromMarkdown(markdown),
+    summary: summaryFromMarkdown(markdown),
+    headed: options.headed,
+  });
 }
 
 main().catch((error) => {

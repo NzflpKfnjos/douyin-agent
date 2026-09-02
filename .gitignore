@@ -2,6 +2,7 @@ node_modules/
 .douyin-browser/
 .env
 douyin.generated.md
+douyin.import.md
 douyin.debug.png
 .DS_Store
 images/
