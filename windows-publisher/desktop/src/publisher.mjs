@@ -82,8 +82,8 @@ export async function closeDouyinLogin() {
 }
 
 function validateArticle(article) {
-  const title = String(article?.title || "").trim();
-  const summary = String(article?.summary || "").trim();
+  const title = String(article?.title || "").trim().replace(/^\[([^\]]+)\]/, "$1");
+  const summary = String(article?.summary || "").trim().replace(/\[([^\]]+)\]/g, "$1");
   const content = String(article?.content || "").trim();
   const topicTag = String(article?.topicTag || "暗区突围").trim().replace(/^#/, "");
   const imagePath = String(article?.imagePath || "").trim();
@@ -152,7 +152,11 @@ async function uploadImage(imagePath, config) {
 
 async function writeImportFile({ tempDir, title, summary, content, imageUrl }) {
   const path = join(tempDir, `douyin-import-${randomUUID()}.md`);
-  await writeFile(path, `![](${imageUrl})\n\n${content.trim()}\n`, "utf8");
+  const imagePattern = /!\[\s*\]\([^)]*\)/;
+  const importedContent = imagePattern.test(content)
+    ? content.trim().replace(imagePattern, `![](${imageUrl})`)
+    : `![](${imageUrl})\n\n${content.trim()}`;
+  await writeFile(path, `${importedContent}\n`, "utf8");
   return { path, title, summary };
 }
 

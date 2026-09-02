@@ -37,11 +37,23 @@ async function chooseImage() {
 }
 
 function replaceTopic(markdown, topic) {
-  const token = markdown.match(/\[([^\]\n]+)\]/)?.[1];
-  if (!token && !topic) throw new Error("douyin.md 中没有找到 [文章主题] 占位文本。");
   if (!topic) return markdown;
-  if (!token) return markdown.replace(/\[\]/g, `[${topic}]`);
-  return markdown.split(`[${token}]`).join(`[${topic}]`);
+  const topicText = topic.trim();
+  const topicValue = topicText.match(/^\[([^\]\n]+)\]$/)?.[1] || topicText;
+  const lines = markdown.split(/\r?\n/);
+  const nonEmpty = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.trim());
+  const titleLine = nonEmpty[0];
+  if (!titleLine) throw new Error("douyin.md 中没有找到文章标题。");
+  const token = titleLine.line.match(/\[([^\]\n]+)\]/)?.[1];
+  if (token) {
+    return markdown.split(`[${token}]`).join(`[${topicValue}]`);
+  }
+  const oldTitle = titleLine.line.trim();
+  lines[titleLine.index] = topicText;
+  if (nonEmpty[1]) lines[nonEmpty[1].index] = nonEmpty[1].line.replace(oldTitle, topic);
+  return lines.join("\n");
 }
 
 function replaceImage(markdown, url) {

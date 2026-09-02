@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   beginDouyinLogin,
@@ -26,6 +27,19 @@ function isS3Configured() {
     const value = String(DEFAULT_CONFIG[name] || "");
     return value && !value.toLowerCase().includes("replace-with");
   });
+}
+
+async function defaultArticle() {
+  const markdown = await readFile(join(import.meta.dirname, "default-article.md"), "utf8");
+  const lines = markdown.split(/\r?\n/);
+  const nonEmpty = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.trim());
+  const title = nonEmpty[0]?.line.trim() || "";
+  const summary = nonEmpty[1]?.line.trim() || "";
+  const bodyStart = (nonEmpty[1]?.index ?? 0) + 1;
+  const content = lines.slice(bodyStart).join("\n").trim();
+  return { title, summary, content, topicTag: "暗区突围" };
 }
 
 function sendProgress(message) {
@@ -55,6 +69,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("publisher:state", async () => {
     return {
       s3Configured: isS3Configured(),
+      defaultArticle: await defaultArticle(),
       profileDirectory: browserProfilePath(),
       profileExists: existsSync(browserProfilePath()),
     };
