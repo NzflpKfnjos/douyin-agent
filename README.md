@@ -69,7 +69,7 @@ npm run upload -- images/example.png
 指定不同主题：
 
 ```bash
-npm run publish -- --topic "新的文章主题"
+npm run publish -- --topic "单局188发61弹"
 ```
 
 ## 故障排查
