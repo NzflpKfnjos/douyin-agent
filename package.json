@@ -1,0 +1,17 @@
+{
+  "name": "douyin-article-publisher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "oss-s3"
+  ],
+  "scripts": {
+    "publish": "node scripts/publish.mjs",
+    "upload": "npm --workspace oss-s3 run upload"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "playwright": "^1.60.0"
+  }
+}

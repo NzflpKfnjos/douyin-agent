@@ -1,0 +1,12 @@
+{
+  "name": "douyin-article-oss-s3",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "upload": "node upload.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.879.0"
+  }
+}
