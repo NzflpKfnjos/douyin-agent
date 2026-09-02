@@ -2,19 +2,26 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { chromium } from "playwright";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 let loginContext;
 let publishContext;
+let chromium;
 
 function error(message) {
   return new Error(message);
 }
 
-function bundledBrowserPath() {
-  if (process.resourcesPath && !process.defaultApp) return join(process.resourcesPath, "pw-browsers");
-  return join(import.meta.dirname, "..", "node_modules", "playwright-core", ".local-browsers");
+function browserSearchPaths() {
+  const developmentPath = join(import.meta.dirname, "..", "node_modules", "playwright-core", ".local-browsers");
+  if (process.resourcesPath && !process.defaultApp) {
+    return [
+      join(process.resourcesPath, "pw-browsers"),
+      join(process.resourcesPath, "app.asar.unpacked", "node_modules", "playwright-core", ".local-browsers"),
+      developmentPath,
+    ];
+  }
+  return [developmentPath];
 }
 
 async function exists(path) {
@@ -26,10 +33,22 @@ async function exists(path) {
   }
 }
 
-async function launchContext(profileDir) {
-  if (await exists(bundledBrowserPath())) {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = bundledBrowserPath();
+async function bundledBrowserPath() {
+  for (const path of browserSearchPaths()) {
+    if (await exists(path)) return path;
   }
+  return "";
+}
+
+async function launchContext(profileDir) {
+  const browserPath = await bundledBrowserPath();
+  if (!browserPath) {
+    throw error("安装包中没有找到 Playwright Chromium。请重新运行 GitHub Actions 构建并安装最新的 exe，不要直接运行 win-unpacked 旧目录。");
+  }
+  // Set this before importing Playwright. Its browser registry is initialized
+  // during module loading and otherwise falls back to %LOCALAPPDATA%\\ms-playwright.
+  process.env.PLAYWRIGHT_BROWSERS_PATH = browserPath;
+  ({ chromium } = await import("playwright"));
   await mkdir(profileDir, { recursive: true });
   return chromium.launchPersistentContext(profileDir, {
     headless: false,

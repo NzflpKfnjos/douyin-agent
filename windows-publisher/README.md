@@ -18,7 +18,9 @@ windows-publisher/
 
 1. 编辑 `desktop/src/default-config.mjs`，填入共用 S3 配置。该软件只私下分发，因此配置会随安装包提供。
 2. 推送代码到 GitHub，或在仓库的 **Actions -> Build Windows publisher -> Run workflow** 手动运行。工作流会在 `windows-latest` 上执行 `npm ci`、下载 Chromium 并构建 NSIS 安装包。
-3. 在该次 workflow 的 Artifacts 中下载 `douyin-article-publisher-windows-*`，将其中的 NSIS 安装包私下分发给使用者。每个使用者安装后只需点击“登录抖音”并完成扫码。
+3. 在该次 workflow 的 Artifacts 中下载 `douyin-article-publisher-windows-*`，其中只包含一个 NSIS 安装包，将它私下分发给使用者。每个使用者安装后只需点击“登录抖音”并完成扫码。
+
+源码只留在 GitHub 仓库中，不会作为构建 artifact 分发；Electron 应用代码会随安装器封装在内部，这是桌面软件正常运行所需的内容。
 
 桌面端首次打开会自动导入 `desktop/src/default-article.md` 中的标题、摘要和正文。模板中的 `[...]` 标记会保留在编辑框中，但发布时会按命令行流程去掉标题和摘要中的标记；修改模板后重新构建安装包即可更新默认文章。
 
@@ -56,3 +58,5 @@ npm run dist:win
 构建过程会下载 Playwright Chromium 并将它打入安装包，因此最终使用者不需要单独安装 Chrome 或 Node.js。构建机需要能访问 Playwright 下载源。
 
 安装包会包含 Electron 运行时和一份 Playwright Chromium，通常约 250-350MB。构建配置已排除重复的浏览器目录并使用最大压缩。`dist/win-unpacked/` 是未压缩的调试目录，可能接近 900MB，不要分发它；GitHub Actions 只上传 `dist/*.exe`，使用该 NSIS 安装包即可。
+
+若登录时报 `Executable doesn't exist ... ms-playwright`，说明运行的是旧安装包或旧的 `win-unpacked` 目录。重新运行 GitHub Actions，下载最新的 `*.exe` 并重新安装；新版本会从安装包内的 `resources/pw-browsers` 加载 Chromium，不需要在用户电脑执行 `npx playwright install`。

@@ -32,7 +32,23 @@ jobs:
         run: npm ci
 
       - name: Build NSIS installer
-        run: npm run dist:win
+        run: npm run dist:win -- --publish never
+
+      - name: Keep only one installer
+        shell: pwsh
+        run: |
+          $dist = Join-Path $PWD "dist"
+          $installers = @(Get-ChildItem -Path $dist -Filter "*.exe" -File)
+          if ($installers.Count -ne 1) {
+            Write-Error "Expected exactly one Windows installer, found $($installers.Count)."
+            Get-ChildItem -Path $dist -Force | Select-Object FullName
+            exit 1
+          }
+          $installer = $installers[0]
+          Get-ChildItem -Path $dist -Force |
+            Where-Object { $_.FullName -ne $installer.FullName } |
+            Remove-Item -Recurse -Force
+          Write-Output "Installer: $($installer.Name)"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4

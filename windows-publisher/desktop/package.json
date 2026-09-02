@@ -24,7 +24,6 @@
     "compression": "maximum",
     "files": [
       "src/**/*",
-      "scripts/**/*",
       "package.json",
       "!node_modules/playwright-core/.local-browsers/**"
     ],

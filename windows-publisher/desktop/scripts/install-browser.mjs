@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -11,4 +12,11 @@ const result = spawnSync(process.execPath, [cliPath, "install", "chromium"], {
   stdio: "inherit",
 });
 
-process.exit(result.status ?? 1);
+if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
+
+const browserDir = join(projectDir, "node_modules", "playwright-core", ".local-browsers");
+if (!existsSync(browserDir)) {
+  console.error(`Playwright Chromium 下载完成但目录不存在: ${browserDir}`);
+  process.exit(1);
+}
+console.log(`Playwright Chromium 已准备: ${browserDir}`);
