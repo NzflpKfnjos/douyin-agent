@@ -54,3 +54,5 @@ npm run dist:win
 ```
 
 构建过程会下载 Playwright Chromium 并将它打入安装包，因此最终使用者不需要单独安装 Chrome 或 Node.js。构建机需要能访问 Playwright 下载源。
+
+安装包会包含 Electron 运行时和一份 Playwright Chromium，通常约 250-350MB。构建配置已排除重复的浏览器目录并使用最大压缩。`dist/win-unpacked/` 是未压缩的调试目录，可能接近 900MB，不要分发它；GitHub Actions 只上传 `dist/*.exe`，使用该 NSIS 安装包即可。

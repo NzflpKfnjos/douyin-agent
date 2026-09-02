@@ -38,6 +38,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: douyin-article-publisher-windows-${{ github.run_number }}
-          path: windows-publisher/desktop/dist/*
+          path: windows-publisher/desktop/dist/*.exe
           if-no-files-found: error
           retention-days: 14

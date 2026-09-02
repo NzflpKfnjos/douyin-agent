@@ -21,13 +21,12 @@
     "appId": "com.douyin.articlepublisher",
     "productName": "抖音文章发布器",
     "asar": true,
-    "asarUnpack": [
-      "node_modules/playwright-core/**"
-    ],
+    "compression": "maximum",
     "files": [
       "src/**/*",
       "scripts/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/playwright-core/.local-browsers/**"
     ],
     "extraResources": [
       {
