@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -34,6 +34,11 @@ async function chooseImage() {
     .map((entry) => join(imagesDir, entry.name));
   if (!images.length) throw new Error(`images 目录中没有可用图片: ${imagesDir}`);
   return images[Math.floor(Math.random() * images.length)];
+}
+
+async function removeSelectedImage(imagePath) {
+  await unlink(imagePath);
+  console.log(`已删除已使用图片: ${imagePath}`);
 }
 
 function replaceTopic(markdown, topic) {
@@ -288,21 +293,25 @@ async function main() {
   const withTopic = replaceTopic(template, topic);
   const imagePath = await chooseImage();
   console.log(`随机图片: ${imagePath}`);
-  const imageUrl = await uploadImage(imagePath);
-  const markdown = replaceImage(withTopic, imageUrl);
-  await writeFile(outputPath, markdown, "utf8");
-  await writeFile(importPath, bodyForArticleImport(markdown), "utf8");
-  console.log(`已生成: ${outputPath}`);
-  console.log(`抖音导入文件: ${importPath}`);
-  console.log(`图片链接: ${imageUrl}`);
-  if (options.dryRun) return;
-  await publishArticleOnDouyin({
-    markdownPath: importPath,
-    imagePath,
-    title: titleFromMarkdown(markdown),
-    summary: summaryFromMarkdown(markdown),
-    headed: options.headed,
-  });
+  try {
+    const imageUrl = await uploadImage(imagePath);
+    const markdown = replaceImage(withTopic, imageUrl);
+    await writeFile(outputPath, markdown, "utf8");
+    await writeFile(importPath, bodyForArticleImport(markdown), "utf8");
+    console.log(`已生成: ${outputPath}`);
+    console.log(`抖音导入文件: ${importPath}`);
+    console.log(`图片链接: ${imageUrl}`);
+    if (options.dryRun) return;
+    await publishArticleOnDouyin({
+      markdownPath: importPath,
+      imagePath,
+      title: titleFromMarkdown(markdown),
+      summary: summaryFromMarkdown(markdown),
+      headed: options.headed,
+    });
+  } finally {
+    await removeSelectedImage(imagePath);
+  }
 }
 
 main().catch((error) => {
