@@ -89,13 +89,58 @@ cd ~/Desktop/douyin-agent
 
 > 如果你的项目不在桌面，把上面的路径换成你自己的实际路径即可。不确定路径时，可以直接把文件夹拖进终端窗口，它会自动填入路径。
 
-### 3.2 安装依赖
+### 3.2 （可选，国内强烈推荐）配置镜像源，加速下载
+
+国内网络直接从官方源下载可能很慢甚至失败。可以把 **npm 镜像源** 和 **Playwright 浏览器下载源** 换成国内镜像（阿里/淘宝、清华、腾讯、华为等）。**只需设置一次。**
+
+**① 切换 npm 镜像源**（三选一，任选一个自己喜欢的地址）：
+
+```bash
+# 阿里 / 淘宝（npmmirror，最常用、最稳定）
+npm config set registry https://registry.npmmirror.com
+
+# 腾讯云
+npm config set registry https://mirrors.cloud.tencent.com/npm/
+
+# 华为云
+npm config set registry https://mirrors.huaweicloud.com/repository/npm/
+```
+
+> 上面命令里的地址可以换成 **任意** 镜像源 URL（例如你所在学校/公司的清华 TUNA 等内部源），格式都一样。
+
+查看当前源、或恢复官方源：
+
+```bash
+# 查看当前使用的源
+npm config get registry
+
+# 恢复官方源
+npm config set registry https://registry.npmjs.org
+```
+
+**② 切换 Playwright 浏览器下载源**（下一步 `npx playwright install` 会用到）：
+
+**Windows（PowerShell）：**
+
+```powershell
+$env:PLAYWRIGHT_DOWNLOAD_HOST = "https://cdn.npmmirror.com/binaries/playwright"
+```
+
+**macOS（终端）：**
+
+```bash
+export PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
+```
+
+> 这条命令只对 **当前终端窗口** 有效。想每次都生效，可写进系统环境变量，或在同一个终端窗口里接着执行后面的安装命令即可。
+
+### 3.3 安装依赖
 
 ```bash
 npm install
 ```
 
-### 3.3 安装浏览器内核（推荐）
+### 3.4 安装浏览器内核（推荐）
 
 为保证在任何电脑上都能打开浏览器，建议装一份 Playwright 自带的 Chromium：
 
@@ -312,6 +357,9 @@ npm run publish
 ## 十、命令速查表
 
 ```bash
+# （可选）切换 npm 镜像源加速，如阿里/淘宝
+npm config set registry https://registry.npmmirror.com
+
 # 安装依赖（首次）
 npm install
 
@@ -358,6 +406,8 @@ douyin-agent/
 | 现象 | 处理办法 |
 | --- | --- |
 | `node` / `npm` 不是内部或外部命令 | Node.js 没装好或没重启终端。重装 [Node.js LTS](https://nodejs.org) 并重新打开终端 |
+| `npm install` 很慢 / 超时 / 卡住 | 切换国内镜像源后重试，见 [3.2 配置镜像源](#32-可选国内强烈推荐配置镜像源加速下载) |
+| `npx playwright install` 下载失败 | 先设置 `PLAYWRIGHT_DOWNLOAD_HOST` 镜像再重试，见 [3.2 配置镜像源](#32-可选国内强烈推荐配置镜像源加速下载) |
 | `Executable doesn't exist` / 打不开浏览器 | 运行 `npx playwright install chromium`；或在 `.env` 里设置 `DOUYIN_BROWSER_EXECUTABLE_PATH` 指向 Chrome/Edge |
 | `缺少 S3 配置` | 检查是否已复制并正确填写 `.env` |
 | 上传成功但图片打不开 | 检查 `S3_PUBLIC_BASE`，确认桶/对象为公开可读，或已走 CDN |
