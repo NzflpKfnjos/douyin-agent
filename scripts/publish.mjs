@@ -210,11 +210,36 @@ async function chooseRecommendedMusic(page) {
   console.log(`已从推荐配乐前 ${Math.min(5, count)} 首中随机选择第 ${index + 1} 首。`);
 }
 
+function detectSystemChrome() {
+  const candidates = [];
+  if (process.platform === "darwin") {
+    candidates.push("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
+  } else if (process.platform === "win32") {
+    const programFiles = process.env["ProgramFiles"] || "C:\\Program Files";
+    const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    const localAppData = process.env["LOCALAPPDATA"] || "";
+    candidates.push(
+      join(programFiles, "Google/Chrome/Application/chrome.exe"),
+      join(programFilesX86, "Google/Chrome/Application/chrome.exe"),
+      localAppData && join(localAppData, "Google/Chrome/Application/chrome.exe"),
+      join(programFiles, "Microsoft/Edge/Application/msedge.exe"),
+      join(programFilesX86, "Microsoft/Edge/Application/msedge.exe"),
+    );
+  } else {
+    candidates.push(
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+      "/snap/bin/chromium",
+    );
+  }
+  return candidates.filter(Boolean).find((candidate) => existsSync(candidate));
+}
+
 async function publishArticleOnDouyin({ markdownPath, imagePath, title, summary, headed }) {
   const browserDataDir = resolve(rootDir, process.env.DOUYIN_BROWSER_DATA_DIR || ".douyin-browser");
-  const systemChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  const executablePath = process.env.DOUYIN_BROWSER_EXECUTABLE_PATH
-    || (existsSync(systemChrome) ? systemChrome : undefined);
+  const executablePath = process.env.DOUYIN_BROWSER_EXECUTABLE_PATH || detectSystemChrome();
   const context = await chromium.launchPersistentContext(browserDataDir, {
     headless: !headed,
     ...(executablePath ? { executablePath } : {}),
