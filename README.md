@@ -415,6 +415,7 @@ douyin-agent/
 | `没有找到 ![](图片链接)` | 在 `douyin.md` 正文中保留 `![](图片链接)` 占位符 |
 | `没有找到"发布文章"入口` | 确认已登录且账号有文章权限；查看根目录生成的 `douyin.debug.png` 截图 |
 | 卡在验证码 / 协议弹窗 / 页面改版 | 在浏览器里手动处理，关掉后重新 `npm run publish`；失败时通常会留下 `douyin.debug.png` |
+| 网络慢 / 页面超时 | 发布与 S3 上传已对关键步骤做有限重试（默认 3 次）。可用 `.env` 的 `DOUYIN_RETRY_ATTEMPTS` / `DOUYIN_RETRY_DELAY_MS` 调整 |
 | 话题找不到 | 默认话题是「暗区突围」，在 `.env` 用 `DOUYIN_TOPIC_TAG` 改成你账号可用的话题 |
 | Windows 上路径含空格报错 | 命令里的路径用英文双引号包起来，如 `cd "C:\我的 项目\douyin-agent"` |
 

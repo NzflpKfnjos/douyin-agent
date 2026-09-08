@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { withRetry } from "../scripts/retry.mjs";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 config({ path: resolve(projectRoot, ".env") });
@@ -71,13 +72,15 @@ export async function uploadImage(filePath, { key } = {}) {
     },
   });
 
-  await client.send(new PutObjectCommand({
-    Bucket: env("S3_BUCKET"),
-    Key: objectKey,
-    Body: body,
-    ContentType: contentType(absolutePath),
-    CacheControl: "public, max-age=31536000, immutable",
-  }));
+  await withRetry("S3 上传图片", async () => {
+    await client.send(new PutObjectCommand({
+      Bucket: env("S3_BUCKET"),
+      Key: objectKey,
+      Body: body,
+      ContentType: contentType(absolutePath),
+      CacheControl: "public, max-age=31536000, immutable",
+    }));
+  });
 
   return objectUrl(env("S3_ENDPOINT"), env("S3_BUCKET"), objectKey);
 }
